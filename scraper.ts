@@ -53,7 +53,7 @@ const scrapeArticles = async (query: string) => {
     while (true) {
       const searchUrl = `https://www.sciencedirect.com/search?qs=${query}&show=100&offset=${
         (currentPage - 1) * 100
-      }`;
+      }&years=2020%2C2019%2C2018%2C2017%2C2016%2C2015&lastSelectedFacet=years`;
       await page.goto(searchUrl, { waitUntil: "domcontentloaded" });
 
       await page.waitForSelector(".result-item-container");
