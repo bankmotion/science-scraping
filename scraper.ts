@@ -7,6 +7,23 @@ import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 puppeteer.use(StealthPlugin());
 
+const dataFile = "data.json";
+let data: string[] = [];
+
+const readFile = () => {
+  const filePath = path.join(__dirname, dataFile);
+  const rawData = fs.readFileSync(filePath, "utf-8");
+  try {
+    data = JSON.parse(rawData);
+  } catch {}
+};
+
+const writeFile = () => {
+  const jsonData = JSON.stringify(data, null, 2);
+  const filePath = path.join(__dirname, dataFile);
+  fs.writeFileSync(filePath, jsonData, "utf-8");
+};
+
 // Function to extract year from different date formats
 const extractYearFromDate = (
   date: string | null | undefined
@@ -82,14 +99,19 @@ const scrapeArticles = async (query: string) => {
         const year = extractYearFromDate(article.date);
         return year && year >= 2015 && year <= 2020;
       });
-      console.log(filteredArticles);
+      console.log("filteredArticles.length", filteredArticles.length);
 
       for (let i = 0; i < filteredArticles.length; i++) {
         const link = filteredArticles[i];
         if (!link.title) continue;
 
+        if (data.includes(link.title)) {
+          console.log("skipped");
+          continue;
+        }
+
         await page.goto(link.title, { waitUntil: "domcontentloaded" });
-        await delay(2);
+        await delay(3);
 
         const articleDOI = await page.evaluate(() => {
           const doiLink = document.querySelector(
@@ -101,21 +123,30 @@ const scrapeArticles = async (query: string) => {
         if (!articleDOI) continue;
 
         const sciHubUrl = `https://sci-hub.st/https://doi.org/${articleDOI}`;
+        console.log(sciHubUrl);
 
         await page.goto(sciHubUrl, { waitUntil: "domcontentloaded" });
-        await delay(2);
+        await delay(3);
 
-        const pdfLink = await page.evaluate(() => {
+        let pdfLink = await page.evaluate(() => {
           const embedElement = document.querySelector(
             "embed"
           ) as HTMLEmbedElement;
           return embedElement ? embedElement.getAttribute("src") : null;
         });
-        console.log(pdfLink);
+        if (pdfLink?.includes("/downloads")) {
+          pdfLink = "https://sci-hub.st" + pdfLink;
+        } else {
+          pdfLink = "https:" + pdfLink;
+        }
+        //
+        // console.log(pdfLink);
 
         if (pdfLink) {
           console.log(`Found PDF, starting download`, pdfLink);
-          await downloadPDF("https://sci-hub.st" + pdfLink, articleDOI);
+          await downloadPDF(pdfLink, articleDOI);
+          data.push(link.title);
+          writeFile();
         } else {
           console.log(`No PDF for DOI: ${articleDOI}`);
         }
@@ -150,8 +181,9 @@ const downloadPDF = async (pdfUrl: string, doi: string) => {
 };
 
 const main = async (query: string) => {
+  readFile();
   const searchResults = await scrapeArticles(query);
   // console.log(searchResults);
 };
 
-main("math");
+main("production line optimization");
